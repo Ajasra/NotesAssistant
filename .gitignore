@@ -1,0 +1,11 @@
+/.env
+/.idea/inspectionProfiles/profiles_settings.xml
+/.idea/inspectionProfiles/Project_Default.xml
+/.idea/.gitignore
+/.idea/dataSources.xml
+/.idea/misc.xml
+/.idea/modules.xml
+/.idea/NancyB bot.iml
+/.idea/TelegramBot.iml
+/.idea/vcs.xml
+/temp.png
