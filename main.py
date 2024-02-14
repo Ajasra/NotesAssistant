@@ -1,5 +1,5 @@
-import io
 import os
+import io
 import aiofiles
 
 from PIL import Image
@@ -10,44 +10,77 @@ from telegram.ext import filters, CommandHandler, MessageHandler, CallbackContex
 
 from dotenv import load_dotenv
 
-from gemini_api import handle_gemini_model, handle_gemini_image
-from helpers import format_text_to_html
-from messages import WELCOME_MESSAGE, HELP_MESSAGE
-from notion_api import add_notion_page
-from openai_api import handle_transcribe_openai
+from utils.gemini_api import handle_gemini_image
+from utils.helpers import format_text_to_html
+from utils.messages import WELCOME_MESSAGE, HELP_MESSAGE
+from utils.notion_api import add_notion_page
+from utils.openai_api import handle_transcribe_openai
 
+# Load environment variables from .env file
 load_dotenv()
+
+# Get environment variables
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 
-model_name = ["gemini", "gpt-3.5-turbo", "gpt-3.5-turbo-16k"]
-
+# Define the model name
+model_name = ["gemini"]
 
 async def start(update: Update, context: CallbackContext):
+    """
+    Function to handle the start command.
+
+    Parameters:
+    update (Update): The update object that contains the status update.
+    context (CallbackContext): The context object that contains the current context of the update.
+    """
     await update.message.reply_text(WELCOME_MESSAGE, parse_mode=ParseMode.HTML)
 
 
 async def send_help(update: Update, context: CallbackContext):
+    """
+    Function to handle the help command.
+
+    Parameters:
+    update (Update): The update object that contains the status update.
+    context (CallbackContext): The context object that contains the current context of the update.
+    """
     await update.message.reply_text(HELP_MESSAGE, parse_mode=ParseMode.HTML)
 
 
 async def handle_image(update: Update, context: CallbackContext):
+    """
+    Function to handle the image message.
+
+    Parameters:
+    update (Update): The update object that contains the status update.
+    context (CallbackContext): The context object that contains the current context of the update.
+    """
     placeholder_message = await update.message.reply_text("...")
     await update.message.chat.send_action(action="typing")
     chat_id = update.message.chat_id
     image_file = await context.bot.getFile(update.message.photo[-1].file_id)
     image_data = await image_file.download_as_bytearray()
 
-    async with aiofiles.open('temp.png', 'wb') as out_file:
+    filename = 'files/{}_{}.png'.format(update.message.chat_id, update.message.message_id)
+
+    async with aiofiles.open(filename, 'wb') as out_file:
         await out_file.write(image_data)
 
-    img = Image.open('temp.png')
+    img = Image.open(filename)
     result = handle_gemini_image(img)
-    reply = add_notion_page(result)
+    reply = add_notion_page(result, image=filename)
     await context.bot.edit_message_text(reply, chat_id=placeholder_message.chat_id,
                                         message_id=placeholder_message.message_id)
 
 
 async def handle_voice(update: Update, context: CallbackContext):
+    """
+    Function to handle the voice message.
+
+    Parameters:
+    update (Update): The update object that contains the status update.
+    context (CallbackContext): The context object that contains the current context of the update.
+    """
     placeholder_message = await update.message.reply_text("...")
     await update.message.chat.send_action(action="typing")
     voice = update.message.voice
@@ -62,12 +95,17 @@ async def handle_voice(update: Update, context: CallbackContext):
     await context.bot.edit_message_text(reply, chat_id=placeholder_message.chat_id,
                                         message_id=placeholder_message.message_id)
 
-async def echo(update: Update, context: CallbackContext):
 
+async def echo(update: Update, context: CallbackContext):
+    """
+    Function to handle the echo command.
+
+    Parameters:
+    update (Update): The update object that contains the status update.
+    context (CallbackContext): The context object that contains the current context of the update.
+    """
     placeholder_message = await update.message.reply_text("...")
     await update.message.chat.send_action(action="typing")
-
-    chat_id = update.message.chat.id
     input_text = update.message.text
 
     try:
@@ -81,6 +119,9 @@ async def echo(update: Update, context: CallbackContext):
 
 
 if __name__ == '__main__':
+    """
+    Main function to start the bot.
+    """
     application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
     start_handler = CommandHandler('start', start)
