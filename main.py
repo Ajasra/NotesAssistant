@@ -1,5 +1,6 @@
 import os
 import io
+
 import aiofiles
 
 from PIL import Image
@@ -11,7 +12,7 @@ from telegram.ext import filters, CommandHandler, MessageHandler, CallbackContex
 from dotenv import load_dotenv
 
 from utils.gemini_api import handle_gemini_image
-from utils.helpers import format_text_to_html
+from utils.helpers import format_text_to_html, find_links_in_text, get_main_text_from_url
 from utils.messages import WELCOME_MESSAGE, HELP_MESSAGE
 from utils.notion_api import add_notion_page
 from utils.openai_api import handle_transcribe_openai
@@ -21,6 +22,7 @@ load_dotenv()
 
 # Get environment variables
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+FILESERVER = os.getenv("FILESERVER")
 
 # Define the model name
 model_name = ["gemini"]
@@ -57,18 +59,17 @@ async def handle_image(update: Update, context: CallbackContext):
     """
     placeholder_message = await update.message.reply_text("...")
     await update.message.chat.send_action(action="typing")
-    chat_id = update.message.chat_id
     image_file = await context.bot.getFile(update.message.photo[-1].file_id)
     image_data = await image_file.download_as_bytearray()
 
-    filename = 'files/{}_{}.png'.format(update.message.chat_id, update.message.message_id)
+    filename = '{}_{}.png'.format(update.message.chat_id, update.message.message_id)
 
-    async with aiofiles.open(filename, 'wb') as out_file:
+    async with aiofiles.open("files/"+filename, 'wb') as out_file:
         await out_file.write(image_data)
 
-    img = Image.open(filename)
+    img = Image.open("files/"+filename)
     result = handle_gemini_image(img)
-    reply = add_notion_page(result, image=filename)
+    reply = add_notion_page(result, image=FILESERVER + filename)
     await context.bot.edit_message_text(reply, chat_id=placeholder_message.chat_id,
                                         message_id=placeholder_message.message_id)
 
@@ -95,7 +96,6 @@ async def handle_voice(update: Update, context: CallbackContext):
     await context.bot.edit_message_text(reply, chat_id=placeholder_message.chat_id,
                                         message_id=placeholder_message.message_id)
 
-
 async def echo(update: Update, context: CallbackContext):
     """
     Function to handle the echo command.
@@ -108,8 +108,25 @@ async def echo(update: Update, context: CallbackContext):
     await update.message.chat.send_action(action="typing")
     input_text = update.message.text
 
-    try:
+
+    # Regular expression to match URLs
+    urls = find_links_in_text(input_text)
+    urls_string = "\n".join(urls)
+    image = ""
+
+    if urls:
+        content = ""
+        for url in urls:
+            content, image = get_main_text_from_url(url)
+        content = """
+        message: {}
+        {}
+        """.format(input_text, content)
+        bot_reply = add_notion_page(input_text, content=content, link=urls_string, image=image)
+    else:
         bot_reply = add_notion_page(input_text)
+
+    try:
         html_text = format_text_to_html(bot_reply)
         await context.bot.edit_message_text(html_text, chat_id=placeholder_message.chat_id,
                                             message_id=placeholder_message.message_id,
